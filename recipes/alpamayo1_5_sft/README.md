@@ -18,9 +18,9 @@ Training uses a two-stage pipeline for convergence and stability:
 
 Alpamayo 1.5 uses Hydra, so you can extend or override configuration in a structured way.
 
-> **Weights & Biases:** To log runs to W&B, uncomment the `wandb` default, and set `report_to: wandb` under
-> `trainer` in [configs/sft_base.yaml](./configs/sft_base.yaml). Additionally, fill in `team` and `project` in
-> [configs/wandb/default.yaml](./configs/wandb/default.yaml), and have your W&B API key available when training starts.
+**Weights & Biases:** To log runs to W&B, uncomment the `wandb` default, and set `report_to: wandb` under
+`trainer` in [configs/sft_base.yaml](./configs/sft_base.yaml). Additionally, fill in `team` and `project` in
+[configs/wandb/default.yaml](./configs/wandb/default.yaml), and have your W&B API key available when training starts.
 
 ## Installation
 
@@ -195,7 +195,7 @@ torchrun --nproc_per_node 8 -m alpamayo1_5_sft.train_hf \
   data.val_dataset.parquet_name=train.parquet
 ```
 
-> `trainer.deepspeed` is passed as an absolute path because Hydra may change the working directory at runtime, and the shipped relative `configs/deepspeed/zero2.json` may not resolve from there. Same applies to the nav and Stage-2 launches if you hit `ValueError: Expected a string path to an existing deepspeed config`.
+Note that `trainer.deepspeed` is passed as an absolute path because Hydra may change the working directory at runtime, and the shipped relative `configs/deepspeed/zero2.json` may not resolve from there. This also applies to the nav and Stage-2 launches if you hit `ValueError: Expected a string path to an existing deepspeed config`.
 
 Because LingoQA was included in training for the released Alpamayo 1.5 model, the loss should remain low and stable.
 ![loss](./loss_A1-5_lingoqa.png)
@@ -213,4 +213,4 @@ torchrun --nproc_per_node 8 \
   evaluate.eval_ckpt=<path/to/output_stage2/checkpoint-xxxx> 
 ```
 
-> Eval is intended for trajectory checkpoints (Stage 2 produced from a navigation Stage-1 run). VQA Stage-1 outputs do not have a trajectory target and aren't covered by the distance metrics above.
+Eval is intended for trajectory checkpoints (Stage 2 produced from a navigation Stage-1 run). VQA Stage-1 outputs do not have a trajectory target and aren't covered by the distance metrics above.
