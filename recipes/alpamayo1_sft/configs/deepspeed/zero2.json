@@ -6,11 +6,21 @@
   "train_batch_size": "auto",
   "gradient_accumulation_steps": "auto",
   "zero_optimization": {
-    "stage": 2,
+    "stage": 3,
+    "offload_optimizer": {
+      "device": "none"
+    },
+    "offload_param": {
+      "device": "none"
+    },
     "overlap_comm": true,
     "contiguous_gradients": true,
-    "reduce_bucket_size": 200000000,
-    "allgather_bucket_size": 200000000
+    "reduce_bucket_size": 2e7,
+    "stage3_prefetch_bucket_size": 2e7,
+    "stage3_param_persistence_threshold": 1e4,
+    "stage3_max_live_parameters": 1e8,
+    "stage3_max_reuse_distance": 1e8,
+    "stage3_gather_1d_weights": true
   },
   "gradient_clipping": "auto",
   "prescale_gradients": false,
