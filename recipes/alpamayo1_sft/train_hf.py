@@ -46,6 +46,13 @@ def train(cfg: DictConfig) -> None:
 
     model = hyu.instantiate(cfg.model, _convert_="partial")
 
+    # Force structural parameter realization for the Vision Encoder if it has the method `initialize_parameters`.
+    if hasattr(model.vlm.model.visual, "initialize_parameters"):
+        print("Forcing structural parameter realization for the Vision Encoder...")
+        model.vlm.model.visual.initialize_parameters()
+    elif hasattr(model.vlm, "initialize_vision_modules"):
+        model.vlm.initialize_vision_modules()
+
     train_dataset = hyu.instantiate(
         cfg.data.train_dataset, _convert_="partial", model_config=model.config
     )
