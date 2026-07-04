@@ -18,7 +18,7 @@ dependencies = [
   "torch==2.8.0",
   "torchvision>=0.23.0",
   "transformers==4.57.1",
-  "flash-attn>=2.8.3",
+  # "flash-attn>=2.8.3",
   "rich>=14.3.3",
   "wandb>=0.25.0",
   "torchmetrics==1.8.2",
@@ -46,10 +46,10 @@ dev = [
 ]
 
 [tool.uv]
-no-build-isolation-package = ["flash-attn"]
+# no-build-isolation-package = ["flash-attn"]
 
 [tool.uv.sources]
-alpamayo_r1 = { git = "https://github.com/NVlabs/alpamayo.git" }
+alpamayo_r1 = { path = "/data/lmc/alpamayo_workspace/alpamayo" }
 alpamayo-recipes = { path = "../../src", editable = true }
 
 [tool.ruff]
