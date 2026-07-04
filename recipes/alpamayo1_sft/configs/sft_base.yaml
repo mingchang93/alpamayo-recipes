@@ -11,7 +11,7 @@ data:
     _recursive_: false
     _target_: alpamayo.data.pai.PAIDataset
     local_dir: ???
-    chunk_ids: "0-99"
+    chunk_ids: "0-9"
     use_default_keyframe: true
     vla_preprocess_args:
       generation_mode: false
@@ -19,7 +19,7 @@ data:
     _recursive_: false
     _target_: alpamayo.data.pai.PAIDataset
     local_dir: ???
-    chunk_ids: "99-100"
+    chunk_ids: "9-10"
     use_default_keyframe: true
     vla_preprocess_args:
       generation_mode: true
