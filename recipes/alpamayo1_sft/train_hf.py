@@ -15,9 +15,19 @@
 
 import importlib.resources
 import os
+
+# NPU setup: register HCCl backend and disable JIT compilation
+import torch
+try:
+    import torch_npu  # noqa: F401
+
+    if torch.npu.is_available():
+        torch.npu.set_compile_mode(jit_compile=False)
+except ImportError:
+    pass
+
 import hydra
 import hydra.utils as hyu
-import torch
 from omegaconf import DictConfig, OmegaConf
 
 from alpamayo_r1.common import logging
