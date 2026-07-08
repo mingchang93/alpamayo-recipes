@@ -99,37 +99,52 @@ def load_alpamayo1_vlm(checkpoint_path: str, model: Any):
     if not vlm_state_dict:
         raise ValueError(f"No vlm.* tensors found in checkpoint: {checkpoint_dir}")
 
-    # Load VLM weights from checkpoint, handling DeepSpeed ZeRO-3 partitioned params.
+    # Load VLM weights from checkpoint, handling lazy/ZeRO-3 params (shape [0]).
     try:
         from deepspeed.runtime.zero.partition_parameters import GatheredParameters
         import deepspeed  # noqa: F401
 
         is_zero3 = (
-            deepspeed.zero.Init.is_zero_init_enabled()
+            getattr(deepspeed.zero.Init, "is_zero_init_enabled", lambda: False)()
             if hasattr(deepspeed, "zero") and hasattr(deepspeed.zero, "Init")
             else False
         )
-        if not is_zero3:
-            # Fallback: ZeRO-3 partitions params to shape [0] on cuda (not meta).
-            is_zero3 = any(
-                p.numel() == 0 and p.device.type != "meta"
-                for _, p in model.named_parameters()
-            )
     except ImportError:
         GatheredParameters = None
         is_zero3 = False
 
+    has_lazy = any(p.numel() == 0 for _, p in model.named_parameters())
+
     if is_zero3 and GatheredParameters is not None:
-        # ZeRO-3: params are partitioned (shape [0]) — use GatheredParameters
-        # to materialize each param before copying checkpoint data into it.
+        # ZeRO-3: params partitioned to shape [0] — use GatheredParameters.
         for name, param in model.named_parameters():
             if name not in vlm_state_dict:
                 continue
-            ckpt_tensor = vlm_state_dict[name]
             with GatheredParameters(param, modifier_rank=0):
-                param.data.copy_(ckpt_tensor.to(param.dtype).to(param.device))
+                param.data.copy_(
+                    vlm_state_dict[name].to(param.dtype).to(param.device)
+                )
         del vlm_state_dict
         logger.info(f"ZeRO-3: Loaded VLM tensors from {checkpoint_dir}")
+    elif has_lazy:
+        # Lazy/uninitialized params (not ZeRO-3): replace zero-shape params
+        # at module level with properly-shaped tensors from checkpoint, then load.
+        for mod_name, module in model.named_modules():
+            for pname, param in list(module._parameters.items()):
+                if param is None or param.numel() != 0:
+                    continue
+                full = f"{mod_name}.{pname}" if mod_name else pname
+                if full in vlm_state_dict:
+                    shape = vlm_state_dict[full].shape
+                    module._parameters[pname] = torch.nn.Parameter(
+                        torch.empty(shape, device=param.device, dtype=param.dtype)
+                    )
+        load_result = model.load_state_dict(vlm_state_dict, strict=False)
+        logger.info(
+            f"Lazy-init: Loaded {len(vlm_state_dict)} VLM tensors from {checkpoint_dir} "
+            f"(missing={len(load_result.missing_keys)}, "
+            f"unexpected={len(load_result.unexpected_keys)})"
+        )
     else:
         load_result = model.load_state_dict(vlm_state_dict, strict=False)
         logger.info(
