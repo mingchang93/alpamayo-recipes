@@ -99,22 +99,21 @@ def load_alpamayo1_vlm(checkpoint_path: str, model: Any):
     if not vlm_state_dict:
         raise ValueError(f"No vlm.* tensors found in checkpoint: {checkpoint_dir}")
 
-    # Force materialize lazy/meta parameters in the Vision Encoder BEFORE loading checkpoint.
-    visual_tower = getattr(getattr(model, "vlm", None), "model", None)
-    if visual_tower and hasattr(visual_tower, "visual"):
-        if hasattr(visual_tower.visual.patch_embed.proj, "weight") and visual_tower.visual.patch_embed.proj.weight.numel() == 0:
-            logger.info("[INFO] Vision Tower contains unmaterialized shapes. Forcing initialization...")
-            if hasattr(visual_tower.visual, "initialize_parameters"):
-                visual_tower.visual.initialize_parameters()
+    # Force materialize lazy/meta parameters BEFORE loading checkpoint.
+    # Pre-allocate proper shapes from the checkpoint state dict for any
+    # UninitializedParameter with numel() == 0.
+    import torch.nn as nn
+
+    for name, param in model.named_parameters():
+        if param.numel() != 0:
+            continue
+        ckpt_key = name if not name.startswith("vlm.") else name
+        if ckpt_key in vlm_state_dict:
+            target_shape = vlm_state_dict[ckpt_key].shape
+            if isinstance(param, nn.UninitializedParameter):
+                param.materialize(target_shape)
             else:
-                import torch
-                logger.info("[INFO] Running dummy visual tensor forward pass to initialize shapes...")
-                with torch.no_grad():
-                    dummy_input = torch.randn(1, 3, 2, 224, 224, dtype=torch.float16, device="cpu")
-                    try:
-                        visual_tower.visual(dummy_input)
-                    except Exception as e:
-                        print(f"[WARNING] Dummy pass failed but shapes might have materialized: {e}")
+                param.data = torch.empty(target_shape, device=param.device, dtype=param.dtype)
 
     load_result = model.load_state_dict(vlm_state_dict, strict=False, assign=True)
 
