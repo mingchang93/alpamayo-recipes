@@ -99,31 +99,24 @@ def load_alpamayo1_vlm(checkpoint_path: str, model: Any):
     if not vlm_state_dict:
         raise ValueError(f"No vlm.* tensors found in checkpoint: {checkpoint_dir}")
 
-    load_result = model.load_state_dict(vlm_state_dict, strict=False, assign=True)
-
-    # Force structural parameter realization for the Vision Encoder if it has the method `initialize_parameters`.
+    # Force materialize lazy/meta parameters in the Vision Encoder BEFORE loading checkpoint.
     visual_tower = getattr(getattr(model, "vlm", None), "model", None)
     if visual_tower and hasattr(visual_tower, "visual"):
-        # Check if the patch embedding project layer is uninitialized (size 0)
         if hasattr(visual_tower.visual.patch_embed.proj, "weight") and visual_tower.visual.patch_embed.proj.weight.numel() == 0:
             logger.info("[INFO] Vision Tower contains unmaterialized shapes. Forcing initialization...")
-            
-            # Scenario A: The backbone module implements a built-in parameter initialization routine
             if hasattr(visual_tower.visual, "initialize_parameters"):
                 visual_tower.visual.initialize_parameters()
-            
-            # Scenario B: Manual fallback structure creation by executing a safe forward placeholder hook
             else:
                 import torch
                 logger.info("[INFO] Running dummy visual tensor forward pass to initialize shapes...")
                 with torch.no_grad():
-                    # Construct a dummy temporal video/image tensor: [Batch, Channels, Frames, Height, Width]
-                    # Adjust dimensions if your specific config expects different spatial defaults
                     dummy_input = torch.randn(1, 3, 2, 224, 224, dtype=torch.float16, device="cpu")
                     try:
                         visual_tower.visual(dummy_input)
                     except Exception as e:
                         print(f"[WARNING] Dummy pass failed but shapes might have materialized: {e}")
+
+    load_result = model.load_state_dict(vlm_state_dict, strict=False, assign=True)
 
     logger.info(
         f"Loaded {len(vlm_state_dict)} VLM tensors from {checkpoint_dir} (missing={len(load_result.missing_keys)}, unexpected={len(load_result.unexpected_keys)})",
