@@ -31,6 +31,7 @@ python scripts/download_pai.py --only-reasoning-chunks --num-reasoning-clips 64 
 from __future__ import annotations
 
 import argparse
+import time
 from pathlib import Path
 
 DEFAULT_REPO_ID = "nvidia/PhysicalAI-Autonomous-Vehicles"
@@ -362,13 +363,25 @@ def main() -> None:
                 "reasoning/ood_reasoning.parquet and clip_index.parquet."
             )
         print("Phase 1 (infer chunks):", PHASE1_INFER_CHUNKS_PATTERNS)
-        snapshot_download(
-            repo_id=DEFAULT_REPO_ID,
-            repo_type="dataset",
-            local_dir=str(args.output_dir),
-            local_dir_use_symlinks=False,
-            allow_patterns=PHASE1_INFER_CHUNKS_PATTERNS,
-        )
+        MAX_RETRIES = 5
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                print(f"Phase 1 download attempt {attempt}/{MAX_RETRIES}...")
+                snapshot_download(
+                    repo_id=DEFAULT_REPO_ID,
+                    repo_type="dataset",
+                    local_dir=str(args.output_dir),
+                    local_dir_use_symlinks=False,
+                    allow_patterns=PHASE1_INFER_CHUNKS_PATTERNS,
+                )
+                print("Phase 1 download completed successfully!")
+                break
+            except Exception as e:
+                print(f"Attempt {attempt} failed: {e}")
+                if attempt == MAX_RETRIES:
+                    raise
+                print("Retrying in 10 seconds...")
+                time.sleep(10)
         inferred = infer_chunk_ids_from_ood_and_clip_index(
             args.output_dir,
             num_reasoning_clips=args.num_reasoning_clips,
@@ -394,13 +407,25 @@ def main() -> None:
         raise SystemExit(str(exc)) from exc
     print("download patterns", allow_patterns)
 
-    downloaded_path = snapshot_download(
-        repo_id=DEFAULT_REPO_ID,
-        repo_type="dataset",
-        local_dir=str(args.output_dir),
-        local_dir_use_symlinks=False,
-        allow_patterns=allow_patterns,
-    )
+    MAX_RETRIES = 5
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            print(f"Download attempt {attempt}/{MAX_RETRIES}...")
+            downloaded_path = snapshot_download(
+                repo_id=DEFAULT_REPO_ID,
+                repo_type="dataset",
+                local_dir=str(args.output_dir),
+                local_dir_use_symlinks=False,
+                allow_patterns=allow_patterns,
+            )
+            print("Download completed successfully!")
+            break
+        except Exception as e:
+            print(f"Attempt {attempt} failed: {e}")
+            if attempt == MAX_RETRIES:
+                raise
+            print("Retrying in 10 seconds...")
+            time.sleep(10)
 
     print(f"Downloaded dataset snapshot to: {downloaded_path}")
     print("Included mandatory patterns: " + ", ".join(MANDATORY_PATTERNS))
