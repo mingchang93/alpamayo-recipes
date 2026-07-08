@@ -19,8 +19,7 @@
     "stage3_prefetch_bucket_size": 2e7,
     "stage3_param_persistence_threshold": 1e4,
     "stage3_max_live_parameters": 1e8,
-    "stage3_max_reuse_distance": 1e8,
-    "stage3_gather_1d_weights": true
+    "stage3_max_reuse_distance": 1e8
   },
   "gradient_clipping": "auto",
   "prescale_gradients": false,
