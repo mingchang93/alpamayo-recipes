@@ -99,26 +99,34 @@ def load_alpamayo1_vlm(checkpoint_path: str, model: Any):
     if not vlm_state_dict:
         raise ValueError(f"No vlm.* tensors found in checkpoint: {checkpoint_dir}")
 
-    # Force materialize lazy/zero-shape parameters BEFORE loading checkpoint.
-    # Walk modules and replace any zero-numel param with a properly-shaped tensor
-    # read from the checkpoint state dict.
-    for mod_name, module in model.named_modules():
-        for param_name, param in list(module._parameters.items()):
-            if param is None or param.numel() != 0:
-                continue
-            full_name = f"{mod_name}.{param_name}" if mod_name else param_name
-            if full_name not in vlm_state_dict:
-                continue
-            target_shape = vlm_state_dict[full_name].shape
-            module._parameters[param_name] = torch.nn.Parameter(
-                torch.empty(target_shape, device=param.device, dtype=param.dtype)
-            )
+    # Load VLM weights from checkpoint, handling DeepSpeed ZeRO-3 meta device.
+    try:
+        from deepspeed.runtime.zero.partition_parameters import GatheredParameters
+        import deepspeed  # noqa: F401
 
-    load_result = model.load_state_dict(vlm_state_dict, strict=False, assign=True)
+        is_zero3 = any(p.device.type == "meta" for _, p in model.named_parameters())
+    except ImportError:
+        GatheredParameters = None
+        is_zero3 = False
 
-    logger.info(
-        f"Loaded {len(vlm_state_dict)} VLM tensors from {checkpoint_dir} (missing={len(load_result.missing_keys)}, unexpected={len(load_result.unexpected_keys)})",
-    )
+    if is_zero3 and GatheredParameters is not None:
+        # ZeRO-3: params on meta device — use GatheredParameters to materialize.
+        for name, param in model.named_parameters():
+            if name not in vlm_state_dict:
+                continue
+            with GatheredParameters([param], modifier_rank=0):
+                param.data.copy_(
+                    vlm_state_dict[name].to(param.dtype).to(param.device)
+                )
+        logger.info(
+            f"ZeRO-3: Loaded {len(vlm_state_dict)} VLM tensors from {checkpoint_dir}"
+        )
+    else:
+        load_result = model.load_state_dict(vlm_state_dict, strict=False)
+        logger.info(
+            f"Loaded {len(vlm_state_dict)} VLM tensors from {checkpoint_dir} "
+            f"(missing={len(load_result.missing_keys)}, unexpected={len(load_result.unexpected_keys)})"
+        )
 
     return model
 
