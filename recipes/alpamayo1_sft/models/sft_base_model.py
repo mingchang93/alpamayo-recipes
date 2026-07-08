@@ -99,21 +99,20 @@ def load_alpamayo1_vlm(checkpoint_path: str, model: Any):
     if not vlm_state_dict:
         raise ValueError(f"No vlm.* tensors found in checkpoint: {checkpoint_dir}")
 
-    # Force materialize lazy/meta parameters BEFORE loading checkpoint.
-    # Pre-allocate proper shapes from the checkpoint state dict for any
-    # UninitializedParameter with numel() == 0.
-    import torch.nn as nn
-
-    for name, param in model.named_parameters():
-        if param.numel() != 0:
-            continue
-        ckpt_key = name if not name.startswith("vlm.") else name
-        if ckpt_key in vlm_state_dict:
-            target_shape = vlm_state_dict[ckpt_key].shape
-            if isinstance(param, nn.UninitializedParameter):
-                param.materialize(target_shape)
-            else:
-                param.data = torch.empty(target_shape, device=param.device, dtype=param.dtype)
+    # Force materialize lazy/zero-shape parameters BEFORE loading checkpoint.
+    # Walk modules and replace any zero-numel param with a properly-shaped tensor
+    # read from the checkpoint state dict.
+    for mod_name, module in model.named_modules():
+        for param_name, param in list(module._parameters.items()):
+            if param is None or param.numel() != 0:
+                continue
+            full_name = f"{mod_name}.{param_name}" if mod_name else param_name
+            if full_name not in vlm_state_dict:
+                continue
+            target_shape = vlm_state_dict[full_name].shape
+            module._parameters[param_name] = torch.nn.Parameter(
+                torch.empty(target_shape, device=param.device, dtype=param.dtype)
+            )
 
     load_result = model.load_state_dict(vlm_state_dict, strict=False, assign=True)
 
