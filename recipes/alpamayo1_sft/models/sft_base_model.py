@@ -235,8 +235,9 @@ class TrainableReasoningVLA(ReasoningVLA, TrajectoryFusionWithFutureMixin):
             "tokens_per_history_traj": checkpoint_config.get("tokens_per_history_traj"),
             "tokens_per_future_traj": checkpoint_config.get("tokens_per_future_traj"),
             "model_dtype": checkpoint_config.get("model_dtype", "bfloat16"),
-            "attn_implementation": checkpoint_config.get(
-                "attn_implementation", "flash_attention_2"
+            "attn_implementation": kwargs.pop(
+                "attn_implementation",
+                checkpoint_config.get("attn_implementation", "flash_attention_2"),
             ),
             "min_pixels": checkpoint_config.get("min_pixels"),
             "max_pixels": checkpoint_config.get("max_pixels"),
